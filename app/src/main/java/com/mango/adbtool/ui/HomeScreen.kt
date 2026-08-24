@@ -1,6 +1,5 @@
 package com.mango.adbtool.ui
 import android.content.Intent
-import android.provider.Settings
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -21,26 +20,23 @@ import com.mango.adbtool.MainViewModel
 import com.mango.adbtool.core.MangoState
 import com.mango.adbtool.ui.theme.*
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 @Composable
 fun HomeScreen(vm: MainViewModel) {
     val state by vm.state.collectAsState()
-    val capturedCode by vm.capturedCode.collectAsState()
     var pairDialog by remember { mutableStateOf(false) }
     var toast by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     LaunchedEffect(toast) { if (toast != null) { delay(3200); toast = null } }
-    // 如果监听到了配对码，自动弹窗
-    LaunchedEffect(capturedCode) {
-        if (!capturedCode.isNullOrEmpty() && state == MangoState.OFFLINE) pairDialog = true
+    // 监听状态：当扫描到配对端口时，自动弹窗
+    LaunchedEffect(state) {
+        if (state == MangoState.WAITING_FOR_CODE) pairDialog = true
     }
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             // 主状态卡：进度展示区
             item {
                 GlassCard {
-                    val isAnimating = state in listOf(MangoState.PAIRING, MangoState.SCANNING, MangoState.STARTING)
+                    val isAnimating = state in listOf(MangoState.SEARCHING_PAIR, MangoState.PAIRING, MangoState.SEARCHING_SERVICE, MangoState.STARTING)
                     val bounce = rememberInfiniteTransition(label = "b").animateFloat(0f, 1f, infiniteRepeatable(tween(900), RepeatMode.Reverse), label = "bv").value
                     Text(state.emoji, fontSize = 50.sp, modifier = Modifier.padding(start = 8.dp).graphicsLayer { translationY = if (isAnimating) -7f * bounce else 0f })
                     Spacer(Modifier.height(8.dp))
@@ -58,14 +54,17 @@ fun HomeScreen(vm: MainViewModel) {
                     Spacer(Modifier.height(20.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         if (state == MangoState.OFFLINE || state == MangoState.FAILED) {
-                            GlassButton("开启配对", "🔗") {
-                                // 检查通知权限，引导用户
-                                val enabled = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
-                                if (enabled?.contains(context.packageName) != true) {
-                                    toast = "请先授予通知使用权，以便自动抓码"
-                                    context.startActivity(Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"))
+                            // 1. 无线调试启动
+                            GlassButton("无线配对", "🔗") {
+                                runCatching {
+                                    context.startActivity(Intent("com.android.settings.WIRELESS_DEBUGGING_SETTINGS"))
                                 }
-                                pairDialog = true
+                                toast = "请点击系统弹窗中的「使用配对码配对设备」"
+                                vm.startDiscovery()
+                            }
+                            // 2. Root 启动 (像 Shizuku 一样)
+                            GlassButton("Root 启动", "🧪") {
+                                vm.startViaRoot()
                             }
                         }
                         if (state == MangoState.RUNNING) {
@@ -77,9 +76,9 @@ fun HomeScreen(vm: MainViewModel) {
             // 电脑党备选方案
             item {
                 GlassCard {
-                    SectionTitle("🔌 没有无线调试？用电脑")
+                    SectionTitle("🔌 没有无线调试/Root？用电脑")
                     Spacer(Modifier.height(6.dp))
-                    Text("如果你的系统低于 Android 11，或者上面配对失败，请用数据线连电脑，执行以下命令一次即可：", fontSize = 12.sp, color = CocoaInkLight)
+                    Text("如果你的系统低于 Android 11 且无 Root，请用数据线连电脑，执行以下命令一次即可：", fontSize = 12.sp, color = CocoaInkLight)
                     Spacer(Modifier.height(10.dp))
                     Text("adb shell sh -c 'cp /storage/emulated/0/Android/data/com.mango.adbtool/files/mango-server.dex /data/local/tmp/ && app_process /system/bin com.mango.adbtool.server.ServerMain'", fontSize = 10.sp, color = CocoaInk, lineHeight = 15.sp)
                 }
@@ -92,24 +91,21 @@ fun HomeScreen(vm: MainViewModel) {
             GlassCard(Modifier.align(Alignment.BottomCenter).padding(bottom = 18.dp), contentPadding = PaddingValues(horizontal = 18.dp, vertical = 12.dp)) { Text(it, fontSize = 13.sp, color = CocoaInk, fontWeight = FontWeight.SemiBold) }
         }
     }
-    // 配对码弹窗
+    // 配对码弹窗（全自动触发，仅需填码）
     if (pairDialog) {
-        var addr by remember { mutableStateOf("127.0.0.1:") }
-        var code by remember { mutableStateOf(capturedCode ?: "") }
-        Dialog(onDismissRequest = { pairDialog = false }) {
+        var code by remember { mutableStateOf("") }
+        Dialog(onDismissRequest = { if (state != MangoState.WAITING_FOR_CODE) pairDialog = false }) {
             GlassCard {
-                SectionTitle("🔗 填写配对信息")
+                SectionTitle("✨ 已抓取到端口")
                 Spacer(Modifier.height(4.dp))
-                Text("去系统无线调试里点「使用配对码配对设备」，把地址和码填这里", fontSize = 11.5.sp, color = CocoaInkLight)
-                Spacer(Modifier.height(12.dp))
-                GlassTextField(addr, { addr = it }, "配对地址 (如 127.0.0.1:39999)", Modifier.fillMaxWidth())
-                Spacer(Modifier.height(8.dp))
-                GlassTextField(code, { code = it }, "6-8 位配对码", Modifier.fillMaxWidth())
+                Text("小芒果已自动检测到配对界面！\n请填入系统弹窗上显示的 6-8 位配对码：", fontSize = 12.5.sp, color = CocoaInkLight)
+                Spacer(Modifier.height(14.dp))
+                GlassTextField(code, { code = it }, "在此输入配对码", Modifier.fillMaxWidth())
                 Spacer(Modifier.height(14.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     GlassButton("一键启动", "🚀", enabled = code.length in 6..8) {
                         pairDialog = false
-                        vm.autoStart(addr, code)
+                        vm.pairAndStart(code)
                     }
                     GlassButton("取消", "🍦") { pairDialog = false }
                 }

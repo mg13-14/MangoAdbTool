@@ -19,12 +19,12 @@ data class GuideStep(val title: String, val desc: String)
 val GUIDE_STEPS = listOf(
     GuideStep("打开开发者选项", "设置 → 关于手机 → 连续点「版本号」7 次"),
     GuideStep("开启无线调试", "开发者选项 → 打开「无线调试」开关（需要 Android 11+）"),
-    GuideStep("拿到配对码", "点「使用配对码配对设备」，记下 IP:端口 和 6-8 位配对码"),
-    GuideStep("回本应用配对", "点首页「开启配对」填入地址和码（授予通知权限可自动填码）"),
-    GuideStep("一键启动", "点「一键启动」，小芒果自动配对、扫描端口、拉起提权服务"),
+    GuideStep("点「无线配对」", "回到首页点按钮，小芒果自动跳转设置并雷达扫描配对端口"),
+    GuideStep("打开配对码弹窗", "在系统里点「使用配对码配对设备」，App 会自动弹出输码框"),
+    GuideStep("填入配对码", "把系统弹窗上的 6-8 位码填进去，点「一键启动」"),
+    GuideStep("Root 用户更省事", "已 Root 的设备（Magisk/KernelSU）直接点「Root 启动」，无需配对"),
     GuideStep("确认绿灯", "状态卡变成 🥭 运行中，就能玩转全部功能啦"),
-    GuideStep("电脑党可选", "不想无线？用数据线连电脑，执行首页的 USB 命令一次"),
-    GuideStep("重启之后", "手机重启后服务会休息，再点一次「开启配对」唤醒它"),
+    GuideStep("重启之后", "手机重启后服务会休息，重新启动一次即可"),
 )
 @Composable
 fun GuideStepCard(index: Int, step: GuideStep) {

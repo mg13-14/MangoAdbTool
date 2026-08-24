@@ -9,15 +9,14 @@ import com.mango.adbtool.adb.AdbClient
 import com.mango.adbtool.adb.AdbCrypto
 import com.mango.adbtool.adb.AdbPairing
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.File
+import java.security.KeyPair
+import java.util.concurrent.TimeUnit
 class MangoManager(private val context: Context) {
     companion object {
         const val PKG = "com.mango.adbtool"
@@ -31,7 +30,9 @@ class MangoManager(private val context: Context) {
     }
     val state = MutableStateFlow(MangoState.OFFLINE)
     private var connection: MangoConnection? = null
-    private fun keyPair() = AdbCrypto.loadOrGenerate(File(context.filesDir, "adb"))
+    private var pairPort: Int? = null
+    private var keyPair: KeyPair? = null
+    private fun getKeyPair() = keyPair ?: AdbCrypto.loadOrGenerate(File(context.filesDir, "adb")).also { keyPair = it }
     fun deployServerDex(): File {
         val out = File(context.getExternalFilesDir(null), "mango-server.dex")
         if (!out.exists() || out.length() == 0L) {
@@ -40,27 +41,50 @@ class MangoManager(private val context: Context) {
         return out
     }
     /**
-     * 全自动流程：配对 -> 扫描端口 -> 启动服务
+     * 通过 Root 一键拉起服务 (类似 Shizuku 的 Root 启动)
      */
-    suspend fun autoStart(pairAddr: String, code: String) = withContext(Dispatchers.IO) {
-        state.value = MangoState.PAIRING
-        val idx = pairAddr.lastIndexOf(':')
-        if (idx <= 0) { state.value = MangoState.FAILED; return@withContext }
-        val host = pairAddr.substring(0, idx).ifBlank { "127.0.0.1" }
-        val port = pairAddr.substring(idx + 1).toIntOrNull()
-        if (port == null) { state.value = MangoState.FAILED; return@withContext }
-        // 1. 尝试配对
-        val pairResult = AdbPairing.pair(host, port, code, keyPair())
-        if (pairResult.isFailure) { state.value = MangoState.FAILED; return@withContext }
-        // 2. 扫描服务端口
-        state.value = MangoState.SCANNING
-        val servicePort = findServicePort()
-        if (servicePort == null) { state.value = MangoState.FAILED; return@withContext }
-        // 3. 启动服务
+    suspend fun startViaRoot() = withContext(Dispatchers.IO) {
         state.value = MangoState.STARTING
         try {
             deployServerDex()
-            AdbClient("127.0.0.1", servicePort, keyPair()).use { adb ->
+            // su -c 执行启动命令；Magisk 授权弹窗可能需要用户手动确认，给足等待时间
+            val p = Runtime.getRuntime().exec(arrayOf("su", "-c", START_CMD))
+            p.waitFor(20, TimeUnit.SECONDS)
+            var up = false
+            repeat(20) { if (!up) { delay(300); up = ping() } }
+            if (!up) throw IllegalStateException("Root 启动失败：未检测到服务响应（设备未 Root 或未授权）")
+            state.value = MangoState.RUNNING
+        } catch (t: Throwable) {
+            state.value = MangoState.FAILED
+        }
+    }
+    /**
+     * 开启雷达扫描配对端口
+     */
+    suspend fun startPairingDiscovery() = withContext(Dispatchers.IO) {
+        state.value = MangoState.SEARCHING_PAIR
+        pairPort = MangoDiscovery.findPairingPort()
+        if (pairPort == null) {
+            state.value = MangoState.FAILED
+        } else {
+            state.value = MangoState.WAITING_FOR_CODE
+        }
+    }
+    /**
+     * 输入配对码后：配对 -> 扫描服务端口 -> 启动服务
+     */
+    suspend fun pairAndStart(code: String) = withContext(Dispatchers.IO) {
+        val port = pairPort ?: run { state.value = MangoState.FAILED; return@withContext }
+        state.value = MangoState.PAIRING
+        val pairResult = AdbPairing.pair("127.0.0.1", port, code, getKeyPair())
+        if (pairResult.isFailure) { state.value = MangoState.FAILED; return@withContext }
+        state.value = MangoState.SEARCHING_SERVICE
+        val servicePort = MangoDiscovery.findServicePort(getKeyPair())
+        if (servicePort == null) { state.value = MangoState.FAILED; return@withContext }
+        state.value = MangoState.STARTING
+        try {
+            deployServerDex()
+            AdbClient("127.0.0.1", servicePort, getKeyPair()).use { adb ->
                 adb.connect()
                 adb.shell(START_CMD)
             }
@@ -70,43 +94,6 @@ class MangoManager(private val context: Context) {
             state.value = MangoState.RUNNING
         } catch (t: Throwable) {
             state.value = MangoState.FAILED
-        }
-    }
-    /**
-     * 读取 /proc/net/tcp 和 tcp6，寻找处于 LISTEN 状态的本地端口，并并发尝试 ADB 握手
-     */
-    private suspend fun findServicePort(): Int? = withContext(Dispatchers.IO) {
-        val ports = mutableSetOf<Int>()
-        listOf("/proc/net/tcp", "/proc/net/tcp6").forEach { path ->
-            runCatching {
-                File(path).useLines { lines ->
-                    lines.drop(1).forEach { line ->
-                        val parts = line.trim().split("\\s+".toRegex())
-                        if (parts.size > 3 && parts[3] == "0A") { // 0A = LISTEN 状态
-                            val localAddr = parts[1]
-                            val hexPort = localAddr.substringAfter(":")
-                            val port = hexPort.toInt(16)
-                            if (port in 30000..50000) { // 无线调试端口通常在这个范围
-                                ports.add(port)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        // 并发尝试连接这些端口，看谁回应 ADB 的 CNXN
-        coroutineScope {
-            val jobs = ports.map { port ->
-                async {
-                    runCatching {
-                        val client = AdbClient("127.0.0.1", port, keyPair())
-                        client.connect()
-                        client.close()
-                        port
-                    }.getOrNull()
-                }
-            }
-            jobs.awaitAll().firstOrNull { it != null }
         }
     }
     suspend fun stopService(): Boolean = withContext(Dispatchers.IO) {

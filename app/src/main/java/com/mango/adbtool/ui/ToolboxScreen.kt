@@ -34,6 +34,7 @@ private val TOOLS = listOf(
     Tool("perm", "🔐", "权限管家", "grant / revoke"),
     Tool("quick", "⚡", "快捷开关", "svc · settings"),
     Tool("install", "📦", "静默安装", "pm install -r"),
+    Tool("flash", "🧱", "模块刷入", "推送并执行脚本")
 )
 @Composable
 fun ToolboxScreen(vm: MainViewModel) {
@@ -60,6 +61,7 @@ fun ToolboxScreen(vm: MainViewModel) {
                 "perm" -> PermPage(vm)
                 "quick" -> QuickPage(vm)
                 "install" -> InstallApkPage(vm)
+                "flash" -> FlashPage(vm)
             }
         }
     }
@@ -80,7 +82,7 @@ fun DeviceInfoPage(vm: MainViewModel) {
     var props by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     LaunchedEffect(Unit) {
         val out = runCatching { vm.manager.exec("getprop") }.getOrDefault("")
-        props = out.lineSequence().mapNotNull { l -> Regex("^\\[(.+?)]: \\[(.*)]$").find(l)?.let { it.groupValues[1] to it.groupValues[2] } }.toMap()
+        props = out.lines().mapNotNull { l -> Regex("^\\[(.+?)]: \\[(.*)]$").find(l)?.let { it.groupValues[1] to it.groupValues[2] } }.toMap()
     }
     LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
         item {
@@ -320,6 +322,25 @@ fun InstallApkPage(vm: MainViewModel) {
             Text("用 shell 权限直接安装，不弹系统安装界面（pm install -r -g）。\n安装结果会打印到「终端」页。", fontSize = 12.sp, color = CocoaInkLight, lineHeight = 17.sp)
             Spacer(Modifier.height(12.dp))
             GlassButton("选择 APK", "📦") { launcher.launch(arrayOf("application/vnd.android.package-archive")) }
+        }
+    }
+}
+// 模块刷入页面
+@Composable
+fun FlashPage(vm: MainViewModel) {
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let {
+            val fileName = it.lastPathSegment?.substringAfterLast('/') ?: "unknown"
+            vm.flashModule(it, fileName)
+        }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        GlassCard {
+            SectionTitle("🧱 刷入并执行模块")
+            Spacer(Modifier.height(6.dp))
+            Text("选择一个 .sh 脚本或二进制执行文件，小芒果会把它推送到 /data/local/tmp/ 并赋予可执行权限，然后立即执行它。\n执行过程和输出会打印到「终端」页。", fontSize = 12.sp, color = CocoaInkLight, lineHeight = 17.sp)
+            Spacer(Modifier.height(12.dp))
+            GlassButton("选择文件刷入", "🚀") { launcher.launch(arrayOf("*/*")) }
         }
     }
 }
