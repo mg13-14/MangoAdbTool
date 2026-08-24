@@ -20,7 +20,7 @@ fun SettingsScreen() {
         Spacer(Modifier.height(30.dp))
         Text("🥭", fontSize = 64.sp)
         Text("芒果提权工具", fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = CocoaInk)
-        Text("v1.5.0 · 液态玻璃版", fontSize = 12.sp, color = CocoaInkLight)
+        Text("v1.5.1 · 液态玻璃版", fontSize = 12.sp, color = CocoaInkLight)
         Spacer(Modifier.height(24.dp))
         // 关于本软件
         GlassCard(Modifier.fillMaxWidth()) {

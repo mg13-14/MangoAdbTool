@@ -161,12 +161,23 @@ class MangoManager(private val context: Context) {
         }.getOrNull()
     }
 
+    /**
+     * 静默安装：先 cp 到 /data/local/tmp（规避作用域存储限制），
+     * pm install 完成后 finally 中 rm -f 清理——安装失败也会删，避免临时 APK 残留
+     */
     suspend fun installApk(uri: android.net.Uri): String = withContext(Dispatchers.IO) {
-        val tmp = File(context.getExternalFilesDir(null), "mango_install.apk")
-        runCatching {
-            context.contentResolver.openInputStream(uri)!!.use { it.copyTo(tmp.outputStream()) }
-            exec("cp ${tmp.absolutePath} /data/local/tmp/mango_install.apk && pm install -r -g /data/local/tmp/mango_install.apk && rm -f /data/local/tmp/mango_install.apk", 180_000)
-        }.getOrElse { "❌ ${it.message}" }
+        try {
+            val tmpFile = File(context.getExternalFilesDir(null), "mango_install.apk")
+            context.contentResolver.openInputStream(uri)?.use { it.copyTo(tmpFile.outputStream()) }
+                ?: return@withContext "❌ 无法读取所选 APK"
+            exec("cp ${tmpFile.absolutePath} /data/local/tmp/mango_install.apk")
+            exec("pm install -r -g /data/local/tmp/mango_install.apk", 120_000)
+        } catch (e: Exception) {
+            "❌ 安装失败: ${e.message}"
+        } finally {
+            // 无论成败都清理临时文件（/data/local/tmp 不会自动清）
+            runCatching { exec("rm -f /data/local/tmp/mango_install.apk") }
+        }
     }
 
     private fun request(json: JSONObject): JSONObject {

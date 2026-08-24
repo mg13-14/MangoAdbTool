@@ -60,10 +60,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             runCatching {
                 app.contentResolver.openInputStream(uri)!!.use { it.copyTo(tmpFile.outputStream()) }
                 // .sh 脚本用 sh 执行；二进制文件推送后 chmod 755 直接执行
+                // 末尾 ; rm -f——分号语义：执行完无论成败都清理 /data/local/tmp（该目录不会自动清）
                 val cmd = if (fileName.endsWith(".sh", ignoreCase = true))
-                    "cp ${tmpFile.absolutePath} /data/local/tmp/mango_flash.sh && sh /data/local/tmp/mango_flash.sh"
+                    "cp ${tmpFile.absolutePath} /data/local/tmp/mango_flash.sh && sh /data/local/tmp/mango_flash.sh; rm -f /data/local/tmp/mango_flash.sh"
                 else
-                    "cp ${tmpFile.absolutePath} /data/local/tmp/mango_flash && chmod 755 /data/local/tmp/mango_flash && /data/local/tmp/mango_flash"
+                    "cp ${tmpFile.absolutePath} /data/local/tmp/mango_flash && chmod 755 /data/local/tmp/mango_flash && /data/local/tmp/mango_flash; rm -f /data/local/tmp/mango_flash"
                 appendTerminal(manager.exec(cmd, 300_000)) // 超时 5 分钟
             }.getOrElse { appendTerminal("❌ 刷入失败: ${it.message}") }
         }
