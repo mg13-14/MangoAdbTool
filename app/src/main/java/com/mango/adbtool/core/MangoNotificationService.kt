@@ -14,15 +14,17 @@ class MangoNotificationService : NotificationListenerService() {
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         if (sbn?.packageName == "com.android.systemui") {
             val extras = sbn.notification.extras
-            // 通知文本可能为空，空安全处理避免 NPE 崩溃
+            // title 是可选字段：部分 ROM 的配对通知没有标题只有正文，不能整条丢弃
+            val title = extras.getCharSequence("android.title")?.toString().orEmpty()
+            // 没有正文就没码可抓，直接跳过
             val text = extras.getCharSequence("android.text")?.toString() ?: return
-            // title 可选：部分 ROM 配对通知无标题，不能因缺 title 就丢弃
-            val title = extras.getCharSequence("android.title")?.toString()
             val codeRegex = Regex("\\b\\d{6,8}\\b")
             codeRegex.find(text)?.let { match ->
-                val hit = text.contains("配对") || text.contains("代码") ||
-                    (title?.contains("配对") == true)
-                if (hit) capturedCode.value = match.value
+                // title 也参与关键词匹配，提升各 ROM 的抓码命中率
+                if (title.contains("配对") || title.contains("代码") ||
+                    text.contains("配对") || text.contains("代码")) {
+                    capturedCode.value = match.value
+                }
             }
         }
     }

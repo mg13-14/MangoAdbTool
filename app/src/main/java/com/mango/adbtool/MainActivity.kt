@@ -1,4 +1,5 @@
 package com.mango.adbtool
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -19,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.mango.adbtool.core.MangoEvents
 import com.mango.adbtool.ui.HomeScreen
 import com.mango.adbtool.ui.SettingsScreen
 import com.mango.adbtool.ui.TerminalScreen
@@ -28,7 +30,21 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        handleIntent(intent)
         setContent { MangoApp() }
+    }
+    // singleTop 模式下，点通知回跳已存在的实例走这里
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIntent(intent)
+    }
+    override fun onResume() { super.onResume(); MangoEvents.inForeground = true }
+    override fun onPause() { super.onPause(); MangoEvents.inForeground = false }
+    private fun handleIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra("open_pair_dialog", false) == true) {
+            MangoEvents.openPairDialog.value = true
+        }
     }
 }
 @Composable

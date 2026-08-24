@@ -17,6 +17,7 @@ import java.io.File
 class MainViewModel(app: Application) : AndroidViewModel(app) {
     val manager = MangoManager(app)
     val state get() = manager.state
+    val error get() = manager.error // 具体失败原因，UI 展示
     // 通知监听服务自动抓取的配对码（未授权通知使用权时恒为 null，需手动输入）
     val capturedCode = MangoNotificationService.capturedCode
     private val _terminal = MutableStateFlow(listOf("🥭 欢迎来到芒果终端！", "服务运行时，这里就是你说了算～输入 help 看常用命令"))

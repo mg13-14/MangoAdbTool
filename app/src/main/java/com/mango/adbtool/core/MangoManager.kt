@@ -32,10 +32,16 @@ class MangoManager(private val context: Context) {
     }
 
     val state = MutableStateFlow(MangoState.OFFLINE)
+    val error = MutableStateFlow<String?>(null) // 具体错误原因，UI 直接展示
     private var connection: MangoConnection? = null
     private var pairHost: String = "127.0.0.1"
     private var pairPort: Int = 0
     private var keyPair: KeyPair? = null
+
+    private suspend fun fail(msg: String) {
+        error.value = msg
+        state.value = MangoState.FAILED
+    }
 
     private fun getKeyPair(): KeyPair =
         keyPair ?: AdbCrypto.loadOrGenerate(File(context.filesDir, "adb")).also { keyPair = it }
@@ -52,6 +58,7 @@ class MangoManager(private val context: Context) {
      * 通过 Root 一键拉起服务 (类似 Shizuku 的 Root 启动)
      */
     suspend fun startViaRoot() = withContext(Dispatchers.IO) {
+        error.value = null
         state.value = MangoState.STARTING
         try {
             deployServerDex()
@@ -60,14 +67,14 @@ class MangoManager(private val context: Context) {
             // 带超时等待，超时后强杀进程，防授权弹窗无人响应时永久挂起
             if (!p.waitFor(20, TimeUnit.SECONDS)) {
                 p.destroyForcibly()
-                throw IllegalStateException("Root 授权超时（20 秒无响应）")
+                throw IllegalStateException("Root 授权超时（20 秒无响应，请在授权弹窗中点允许）")
             }
             var up = false
             repeat(20) { if (!up) { delay(300); up = ping() } }
-            if (!up) throw IllegalStateException("Root 启动失败：未检测到服务响应（设备未 Root 或未授权）")
+            if (!up) throw IllegalStateException("Root 启动失败：su 执行了但服务未响应（设备未 Root 或未授权，检查 Magisk 授权日志）")
             state.value = MangoState.RUNNING
         } catch (t: Throwable) {
-            state.value = MangoState.FAILED
+            fail(t.message ?: "Root 启动失败")
         }
     }
 
@@ -75,14 +82,19 @@ class MangoManager(private val context: Context) {
      * 开启 NsdManager (mDNS) 监听配对服务
      */
     suspend fun startPairingDiscovery() = withContext(Dispatchers.IO) {
+        error.value = null
         state.value = MangoState.SEARCHING_PAIR
         val found = MangoDiscovery.findPairingPort(context)
         if (found == null) {
-            state.value = MangoState.FAILED
+            fail("60 秒内未发现配对服务，请确认已点开系统「使用配对码配对设备」弹窗")
         } else {
             pairHost = found.first
             pairPort = found.second
             state.value = MangoState.WAITING_FOR_CODE
+            // 用户切去系统设置开配对界面时（App 在后台），发通知把人叫回来
+            if (!MangoEvents.inForeground) {
+                MangoNotifier.notifyPairingDetected(context)
+            }
         }
     }
 
@@ -90,13 +102,16 @@ class MangoManager(private val context: Context) {
      * 输入配对码后：配对 -> 发现服务端口 -> 启动服务
      */
     suspend fun pairAndStart(code: String) = withContext(Dispatchers.IO) {
-        if (pairPort == 0) { state.value = MangoState.FAILED; return@withContext }
+        if (pairPort == 0) { fail("尚未发现配对端口，请先点「无线配对」"); return@withContext }
         state.value = MangoState.PAIRING
         val pairResult = AdbPairing.pair(pairHost, pairPort, code, getKeyPair())
-        if (pairResult.isFailure) { state.value = MangoState.FAILED; return@withContext }
+        if (pairResult.isFailure) {
+            fail("配对失败：${pairResult.exceptionOrNull()?.message ?: "未知错误"}（配对码可能已过期，重新打开配对界面再试）")
+            return@withContext
+        }
         state.value = MangoState.SEARCHING_SERVICE
         val service = MangoDiscovery.findServicePort(context)
-        if (service == null) { state.value = MangoState.FAILED; return@withContext }
+        if (service == null) { fail("未找到 ADB 服务端口，请确认「无线调试」总开关已打开"); return@withContext }
         val serviceHost = service.first
         val servicePort = service.second
         state.value = MangoState.STARTING
@@ -108,10 +123,13 @@ class MangoManager(private val context: Context) {
             }
             var up = false
             repeat(20) { if (!up) { delay(300); up = ping() } }
-            if (!up) throw IllegalStateException("服务唤醒失败")
+            if (!up) throw IllegalStateException("服务唤醒失败：命令已发送但 ping 无响应")
+            error.value = null
             state.value = MangoState.RUNNING
+            // 服务起来了，配对提醒通知可以撤掉
+            MangoNotifier.cancel(context)
         } catch (t: Throwable) {
-            state.value = MangoState.FAILED
+            fail(t.message ?: "启动失败")
         }
     }
 
