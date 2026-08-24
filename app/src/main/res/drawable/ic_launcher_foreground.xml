@@ -2,27 +2,78 @@
     xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp" android:height="108dp"
     android:viewportWidth="108" android:viewportHeight="108">
-    <path android:pathData="M53,36 C52,31 51,28 49,26" android:strokeColor="#FF8C6239" android:strokeWidth="2.4" android:strokeLineCap="round"/>
-    <path android:pathData="M55,34 C56,27 62,22 68,21 C68,28 63,33 57,35 Z">
+
+    <!-- 柔和投影，制造悬浮感 -->
+    <group android:translateY="2.6">
+        <path android:pathData="M54.5,34.5 C68.5,34.8 78,44.8 78,58 C78,65 75.3,71 70.5,75.5 C65.8,80 59.8,82.5 53.8,82.5 C47,82.5 41,79.6 36.3,74.7 C31.6,69.8 29.5,63.6 29.5,57.5 C29.7,44.2 40.8,34.3 54.5,34.5 Z"
+            android:fillColor="#1F000000"/>
+    </group>
+
+    <!-- 果柄 -->
+    <path android:pathData="M54.6,37 C54.3,33.8 55.3,31.2 57.4,29.2"
+        android:strokeColor="#FF8E5B32" android:strokeWidth="2.6" android:strokeLineCap="round"/>
+
+    <!-- 果身 -->
+    <path android:pathData="M54.5,34.5 C68.5,34.8 78,44.8 78,58 C78,65 75.3,71 70.5,75.5 C65.8,80 59.8,82.5 53.8,82.5 C47,82.5 41,79.6 36.3,74.7 C31.6,69.8 29.5,63.6 29.5,57.5 C29.7,44.2 40.8,34.3 54.5,34.5 Z">
         <aapt:attr name="android:fillColor">
-            <gradient android:type="linear" android:startX="54" android:startY="22" android:endX="68" android:endY="33">
-                <item android:offset="0" android:color="#FF9CDA7C"/>
-                <item android:offset="1" android:color="#FF5FA85B"/>
+            <gradient android:type="linear" android:startX="39" android:startY="37" android:endX="69" android:endY="82">
+                <item android:offset="0" android:color="#FFFFD949"/>
+                <item android:offset="0.42" android:color="#FFFFC02E"/>
+                <item android:offset="0.75" android:color="#FFFF9C2B"/>
+                <item android:offset="1" android:color="#FFFF7A3D"/>
             </gradient>
         </aapt:attr>
     </path>
-    <path android:pathData="M54,34 C69,34 79,45 79,60 C79,75 68,86 54,86 C40,86 29,75 29,60 C29,45 39,34 54,34 Z">
+
+    <!-- 顶部玫瑰红晕 -->
+    <path android:pathData="M54.5,34.5 C68.5,34.8 78,44.8 78,58 C77.5,49 71,39.5 54.5,34.5 Z">
         <aapt:attr name="android:fillColor">
-            <gradient android:type="linear" android:startX="40" android:startY="36" android:endX="66" android:endY="84">
-                <item android:offset="0" android:color="#FFFFE082"/>
-                <item android:offset="0.55" android:color="#FFFFC93C"/>
-                <item android:offset="1" android:color="#FFFF9F45"/>
+            <gradient android:type="linear" android:startX="74" android:startY="38" android:endX="56" android:endY="52">
+                <item android:offset="0" android:color="#66FF7259"/>
+                <item android:offset="1" android:color="#00FF7259"/>
             </gradient>
         </aapt:attr>
     </path>
-    <path android:pathData="M43,44 C48,39 56,38 61,41 C58,42 51,43 47,48 C44,52 43,57 44,61 C40,57 39,49 43,44 Z" android:fillColor="#80FFFFFF"/>
-    <path android:pathData="M47,46 m-2.2,0 a2.2,2.2 0 1,1 4.4,0 a2.2,2.2 0 1,1 -4.4,0" android:fillColor="#E6FFFFFF"/>
-    <path android:pathData="M42,67 m-3.4,0 a3.4,3.4 0 1,1 6.8,0 a3.4,3.4 0 1,1 -6.8,0" android:fillColor="#66FF8A80"/>
-    <path android:pathData="M66,67 m-3.4,0 a3.4,3.4 0 1,1 6.8,0 a3.4,3.4 0 1,1 -6.8,0" android:fillColor="#66FF8A80"/>
-    <path android:pathData="M50,69 Q54,73 58,69" android:strokeColor="#B38C6239" android:strokeWidth="2" android:strokeLineCap="round" android:fillColor="#00000000"/>
+
+    <!-- 叶子 -->
+    <path android:pathData="M56.8,32.8 C58.6,28 63.4,25 68.6,25.8 C68.2,31 63.4,34.6 57.6,34.9 C56.6,34.4 56.3,33.6 56.8,32.8 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="57.5" android:startY="34" android:endX="68.5" android:endY="26">
+                <item android:offset="0" android:color="#FF9BD98B"/>
+                <item android:offset="1" android:color="#FF4E9A52"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path android:pathData="M59.2,31.6 C61.8,29.2 64.4,27.9 66.6,27.7"
+        android:strokeColor="#59FFFFFF" android:strokeWidth="1.1" android:strokeLineCap="round"/>
+
+    <!-- 玻璃高光弧 -->
+    <path android:pathData="M51,36.6 C42.8,37.4 35.6,43.2 32.9,51.8 C33.9,44.9 38.4,39.1 45.2,36.9 C47.1,36.4 49.1,36.3 51,36.6 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="48" android:startY="37" android:endX="34" android:endY="52">
+                <item android:offset="0" android:color="#59FFFFFF"/>
+                <item android:offset="1" android:color="#0FFFFFFF"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path android:pathData="M41.8,44.2 m-2.1,0 a2.1,2.1 0 1,1 4.2,0 a2.1,2.1 0 1,1 -4.2,0" android:fillColor="#C0FFFFFF"/>
+    <path android:pathData="M46.6,40.2 m-1.1,0 a1.1,1.1 0 1,1 2.2,0 a1.1,1.1 0 1,1 -2.2,0" android:fillColor="#87FFFFFF"/>
+
+    <!-- 底部 rim light -->
+    <path android:pathData="M38,72.5 C42.3,77.6 47.8,80.4 53.6,80.8 C59.4,80.4 64.8,77.8 68.8,73.2"
+        android:strokeColor="#29FFFFFF" android:strokeWidth="2.4" android:strokeLineCap="round"/>
+
+    <!-- 眼睛 -->
+    <path android:pathData="M46,57.5 m-2.6,0 a2.6,2.6 0 1,1 5.2,0 a2.6,2.6 0 1,1 -5.2,0" android:fillColor="#FF7A4A22"/>
+    <path android:pathData="M62,57.5 m-2.6,0 a2.6,2.6 0 1,1 5.2,0 a2.6,2.6 0 1,1 -5.2,0" android:fillColor="#FF7A4A22"/>
+    <path android:pathData="M45.2,56.4 m-0.9,0 a0.9,0.9 0 1,1 1.8,0 a0.9,0.9 0 1,1 -1.8,0" android:fillColor="#FFFFFFFF"/>
+    <path android:pathData="M61.2,56.4 m-0.9,0 a0.9,0.9 0 1,1 1.8,0 a0.9,0.9 0 1,1 -1.8,0" android:fillColor="#FFFFFFFF"/>
+
+    <!-- 腮红 -->
+    <path android:pathData="M39.5,64.8 m-4.2,0 a4.2,2.9 0 1,1 8.4,0 a4.2,2.9 0 1,1 -8.4,0" android:fillColor="#4DFF8570"/>
+    <path android:pathData="M68.5,64.8 m-4.2,0 a4.2,2.9 0 1,1 8.4,0 a4.2,2.9 0 1,1 -8.4,0" android:fillColor="#4DFF8570"/>
+
+    <!-- 微笑 -->
+    <path android:pathData="M49.8,65.6 Q54,70.2 58.2,65.6"
+        android:strokeColor="#CC7A4E24" android:strokeWidth="2.2" android:strokeLineCap="round" android:fillColor="#00000000"/>
 </vector>

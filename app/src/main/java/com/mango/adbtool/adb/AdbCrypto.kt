@@ -1,5 +1,4 @@
 package com.mango.adbtool.adb
-import android.util.Base64
 import java.io.File
 import java.security.KeyFactory
 import java.security.KeyPair
@@ -36,7 +35,7 @@ object AdbCrypto {
         val body = ByteArray(268)
         be32(body, 0, 64); be32(body, 4, n0inv.toInt())
         System.arraycopy(n, 0, body, 8, 256); be32(body, 264, pub.publicExponent.toInt())
-        return (Base64.encodeToString(body, Base64.NO_WRAP) + " " + name).toByteArray()
+        return (java.util.Base64.getEncoder().encodeToString(body) + " " + name).toByteArray()
     }
     private fun be32(a: ByteArray, o: Int, v: Int) {
         a[o] = (v ushr 24).toByte(); a[o + 1] = (v ushr 16).toByte()

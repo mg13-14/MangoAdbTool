@@ -7,5 +7,5 @@ enum class MangoState(val label: String, val emoji: String, val desc: String) {
     SEARCHING_SERVICE("正在定位服务端口…", "📡", "配对成功！正在通过 mDNS 寻找真正的服务端口"),
     STARTING("正在唤醒提权服务…", "⏳", "端口已找到，正在拉起 shell 权限服务"),
     RUNNING("提权服务运行中", "🥭", "一切就绪！尽情折腾你的设备吧 🎉"),
-    FAILED("启动失败", "🍑", "流程中断了，可能配对码过期或未打开配对界面")
+    FAILED("启动失败", "🥀", "流程中断了，可能配对码过期或未打开配对界面")
 }

@@ -9,8 +9,8 @@ android {
         applicationId = "com.mango.adbtool"
         minSdk = 26
         targetSdk = 34
-        versionCode = 10
-        versionName = "1.5.2"
+        versionCode = 11
+        versionName = "1.6.0"
     }
     buildFeatures { compose = true; buildConfig = true }
     composeOptions { kotlinCompilerExtensionVersion = "1.5.8" }
@@ -30,7 +30,17 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.material3:material3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    // SPAKE2 所需的 Edwards25519 运算库（MPL-2.0，无传染性）
+    implementation("cafe.cryptography:curve25519-elisabeth:0.1.0")
     debugImplementation("androidx.compose.ui:ui-tooling")
+    testImplementation("junit:junit:4.13.2")
+    // JVM 测试用 Conscrypt 提供与 Android 平台一致的 TLS 1.3 + EKM 导出
+    testImplementation("org.conscrypt:conscrypt-openjdk-uber:2.5.2")
+}
+// Conscrypt 2.5.2 在 JDK 17 强封装下需要放开 java.net 反射，
+// 否则 mock 服务端验证客户端证书时会抛 InaccessibleObjectException
+tasks.withType<Test>().configureEach {
+    jvmArgs("--add-opens", "java.base/java.net=ALL-UNNAMED")
 }
 val buildServerDex by tasks.registering {
     dependsOn(":server:assembleRelease")
