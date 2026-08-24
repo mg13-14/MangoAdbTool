@@ -25,6 +25,8 @@ class AdbClient(
     fun connect() {
         val s = trustAll().socketFactory.createSocket() as SSLSocket
         s.connect(InetSocketAddress(host, port), 8000)
+        // 握手期设读超时，防止连到非 ADB 端口时无限阻塞（端口扫描依赖此行为）
+        s.soTimeout = 8000
         s.startHandshake()
         socket = s
         input = DataInputStream(s.inputStream)
@@ -42,6 +44,8 @@ class AdbClient(
             } else error("不支持的 AUTH 类型: ${msg.arg0}")
         }
         check(msg.cmd == "CNXN") { "ADB 握手失败: ${msg.cmd}" }
+        // 握手完成，清除读超时，长命令不再受限制
+        s.soTimeout = 0
     }
     fun shell(command: String, onOutput: (String) -> Unit = {}): String {
         val localId = nextId++

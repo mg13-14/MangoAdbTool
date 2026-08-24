@@ -2,13 +2,13 @@ package com.mango.adbtool
 import android.app.Application
 import android.content.ContentValues
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.mango.adbtool.core.MangoManager
+import com.mango.adbtool.core.MangoNotificationService
 import com.mango.adbtool.core.MangoState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -17,6 +17,7 @@ import kotlinx.coroutines.launch
 class MainViewModel(app: Application) : AndroidViewModel(app) {
     val manager = MangoManager(app)
     val state get() = manager.state
+    val capturedCode = MangoNotificationService.capturedCode
     private val _terminal = MutableStateFlow(listOf("🥭 欢迎来到芒果终端！", "服务运行时，这里就是你说了算～输入 help 看常用命令"))
     val terminal: StateFlow<List<String>> = _terminal.asStateFlow()
     private val HELP_LINES = listOf(
@@ -27,8 +28,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         " settings get global airplane_mode_on",
         " am start -a android.settings.SETTINGS   # 打开设置",
         " svc wifi disable           # 关 Wi-Fi",
-        " logcat -d -t 100           # 最近 100 行日志",
-        " getprop ro.product.model   # 机型",
         "─────────────────────────────"
     )
     fun appendTerminal(s: String) { _terminal.value = _terminal.value + s }
@@ -42,19 +41,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             if (out.isBlank()) appendTerminal("(无输出)") else out.lineSequence().forEach(::appendTerminal)
         }
     }
-    suspend fun pair(addr: String, code: String): Result<Unit> {
-        val idx = addr.lastIndexOf(':')
-        if (idx <= 0) return Result.failure(IllegalArgumentException("地址要像 127.0.0.1:39999 这样填"))
-        val host = addr.substring(0, idx).ifBlank { "127.0.0.1" }
-        val port = addr.substring(idx + 1).toIntOrNull() ?: return Result.failure(IllegalArgumentException("端口要是数字呀"))
-        return manager.pair(host, port, code.trim())
-    }
-    fun startWireless(portText: String, onDone: (Result<Unit>) -> Unit = {}) {
-        viewModelScope.launch {
-            val port = portText.trim().toIntOrNull()
-            val r = if (port == null) Result.failure(IllegalArgumentException("先填好服务端口")) else manager.startViaWireless(port)
-            onDone(r)
-        }
+    fun autoStart(addr: String, code: String) {
+        viewModelScope.launch { manager.autoStart(addr, code) }
     }
     fun stop() = viewModelScope.launch { manager.stopService() }
     suspend fun screenshot(): Bitmap? = manager.screenshot()

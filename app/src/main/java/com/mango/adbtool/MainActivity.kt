@@ -97,7 +97,7 @@ private fun AboutScreen() {
         Spacer(Modifier.height(30.dp))
         Text("🥭", fontSize = 64.sp)
         Text("芒果提权工具", fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = CocoaInk)
-        Text("v1.0.0 · 让小芒果替你握住 ADB", fontSize = 12.sp, color = CocoaInkLight)
+        Text("v1.1.0 · 让小芒果替你握住 ADB", fontSize = 12.sp, color = CocoaInkLight)
         Spacer(Modifier.height(20.dp))
         GlassCard {
             Text("⚙️ 工作原理", fontWeight = FontWeight.Bold, color = CocoaInk, fontSize = 15.sp)
