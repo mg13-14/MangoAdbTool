@@ -57,16 +57,28 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val app = getApplication<Application>()
             val tmpFile = File(app.getExternalFilesDir(null), "mango_flash_${System.currentTimeMillis()}")
-            runCatching {
-                app.contentResolver.openInputStream(uri)!!.use { it.copyTo(tmpFile.outputStream()) }
-                // .sh 脚本用 sh 执行；二进制文件推送后 chmod 755 直接执行
-                // 末尾 ; rm -f——分号语义：执行完无论成败都清理 /data/local/tmp（该目录不会自动清）
-                val cmd = if (fileName.endsWith(".sh", ignoreCase = true))
-                    "cp ${tmpFile.absolutePath} /data/local/tmp/mango_flash.sh && sh /data/local/tmp/mango_flash.sh; rm -f /data/local/tmp/mango_flash.sh"
-                else
-                    "cp ${tmpFile.absolutePath} /data/local/tmp/mango_flash && chmod 755 /data/local/tmp/mango_flash && /data/local/tmp/mango_flash; rm -f /data/local/tmp/mango_flash"
+            try {
+                val ins = app.contentResolver.openInputStream(uri)
+                    ?: return@launch appendTerminal("❌ 无法读取所选文件")
+                ins.use { it.copyTo(tmpFile.outputStream()) }
+                // 分号结尾：无论执行成败，rm -f 都会跑
+                // .sh 分支：sh 解释执行，不依赖执行位；二进制分支：chmod 755 后直接执行
+                val cmd = if (fileName.endsWith(".sh", ignoreCase = true)) {
+                    "cp ${tmpFile.absolutePath} /data/local/tmp/mango_flash.sh && " +
+                    "sh /data/local/tmp/mango_flash.sh; " +
+                    "rm -f /data/local/tmp/mango_flash.sh"
+                } else {
+                    "cp ${tmpFile.absolutePath} /data/local/tmp/mango_flash && " +
+                    "chmod 755 /data/local/tmp/mango_flash && /data/local/tmp/mango_flash; " +
+                    "rm -f /data/local/tmp/mango_flash"
+                }
                 appendTerminal(manager.exec(cmd, 300_000)) // 超时 5 分钟
-            }.getOrElse { appendTerminal("❌ 刷入失败: ${it.message}") }
+            } catch (e: Exception) {
+                appendTerminal("❌ 刷入失败: ${e.message}")
+            } finally {
+                // 本地 App 侧临时拷贝同样清理（旧版会按时间戳无限堆积）
+                runCatching { tmpFile.delete() }
+            }
         }
     }
     fun saveBitmap(bmp: Bitmap): Boolean = runCatching {
