@@ -16,11 +16,13 @@ class MangoNotificationService : NotificationListenerService() {
             val extras = sbn.notification.extras
             // 通知文本可能为空，空安全处理避免 NPE 崩溃
             val text = extras.getCharSequence("android.text")?.toString() ?: return
+            // title 可选：部分 ROM 配对通知无标题，不能因缺 title 就丢弃
+            val title = extras.getCharSequence("android.title")?.toString()
             val codeRegex = Regex("\\b\\d{6,8}\\b")
             codeRegex.find(text)?.let { match ->
-                if (text.contains("配对") || text.contains("代码")) {
-                    capturedCode.value = match.value
-                }
+                val hit = text.contains("配对") || text.contains("代码") ||
+                    (title?.contains("配对") == true)
+                if (hit) capturedCode.value = match.value
             }
         }
     }

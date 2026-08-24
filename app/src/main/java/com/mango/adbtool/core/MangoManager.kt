@@ -57,7 +57,11 @@ class MangoManager(private val context: Context) {
             deployServerDex()
             // su -c 执行启动命令；Magisk 授权弹窗可能需要用户手动确认，给足等待时间
             val p = Runtime.getRuntime().exec(arrayOf("su", "-c", START_CMD))
-            p.waitFor(20, TimeUnit.SECONDS)
+            // 带超时等待，超时后强杀进程，防授权弹窗无人响应时永久挂起
+            if (!p.waitFor(20, TimeUnit.SECONDS)) {
+                p.destroyForcibly()
+                throw IllegalStateException("Root 授权超时（20 秒无响应）")
+            }
             var up = false
             repeat(20) { if (!up) { delay(300); up = ping() } }
             if (!up) throw IllegalStateException("Root 启动失败：未检测到服务响应（设备未 Root 或未授权）")
