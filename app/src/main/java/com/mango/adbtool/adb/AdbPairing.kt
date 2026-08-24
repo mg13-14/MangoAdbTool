@@ -21,6 +21,7 @@ object AdbPairing {
         socket.use { s ->
             // 修复1：不强制指定协议和加密套件，让系统自动协商，否则部分设备握手失败
             s.connect(InetSocketAddress(host, port), 10_000)
+            s.soTimeout = 10_000 // 读超时保护，防止配对服务端无响应时无限阻塞
             s.startHandshake()
             val input = DataInputStream(s.inputStream)
             val output = s.outputStream

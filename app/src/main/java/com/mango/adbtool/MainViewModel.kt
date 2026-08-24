@@ -8,7 +8,7 @@ import android.provider.MediaStore
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.mango.adbtool.core.MangoManager
-import com.mango.adbtool.core.MangoState
+import com.mango.adbtool.core.MangoNotificationService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,6 +17,8 @@ import java.io.File
 class MainViewModel(app: Application) : AndroidViewModel(app) {
     val manager = MangoManager(app)
     val state get() = manager.state
+    // 通知监听服务自动抓取的配对码（未授权通知使用权时恒为 null，需手动输入）
+    val capturedCode = MangoNotificationService.capturedCode
     private val _terminal = MutableStateFlow(listOf("🥭 欢迎来到芒果终端！", "服务运行时，这里就是你说了算～输入 help 看常用命令"))
     val terminal: StateFlow<List<String>> = _terminal.asStateFlow()
     private val HELP_LINES = listOf(
