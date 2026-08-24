@@ -19,7 +19,7 @@ data class GuideStep(val title: String, val desc: String)
 val GUIDE_STEPS = listOf(
     GuideStep("打开开发者选项", "设置 → 关于手机 → 连续点「版本号」7 次"),
     GuideStep("开启无线调试", "开发者选项 → 打开「无线调试」开关（需要 Android 11+）"),
-    GuideStep("点「无线配对」", "回到首页点按钮，小芒果自动跳转设置并雷达扫描配对端口"),
+    GuideStep("点「无线配对」", "回到首页点按钮，小芒果自动跳转设置并通过 mDNS 监听配对服务"),
     GuideStep("打开配对码弹窗", "在系统里点「使用配对码配对设备」，App 会自动弹出输码框"),
     GuideStep("填入配对码", "把系统弹窗上的 6-8 位码填进去，点「一键启动」"),
     GuideStep("Root 用户更省事", "已 Root 的设备（Magisk/KernelSU）直接点「Root 启动」，无需配对"),

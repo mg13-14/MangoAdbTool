@@ -1,4 +1,5 @@
 package com.mango.adbtool.core
+
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -17,6 +18,7 @@ import java.io.BufferedReader
 import java.io.File
 import java.security.KeyPair
 import java.util.concurrent.TimeUnit
+
 class MangoManager(private val context: Context) {
     companion object {
         const val PKG = "com.mango.adbtool"
@@ -28,11 +30,16 @@ class MangoManager(private val context: Context) {
             "nohup env CLASSPATH=$DEX_TMP app_process /system/bin " +
             "--nice-name=mango_server $SERVER_MAIN >/dev/null 2>&1 &"
     }
+
     val state = MutableStateFlow(MangoState.OFFLINE)
     private var connection: MangoConnection? = null
-    private var pairPort: Int? = null
+    private var pairHost: String = "127.0.0.1"
+    private var pairPort: Int = 0
     private var keyPair: KeyPair? = null
-    private fun getKeyPair() = keyPair ?: AdbCrypto.loadOrGenerate(File(context.filesDir, "adb")).also { keyPair = it }
+
+    private fun getKeyPair(): KeyPair =
+        keyPair ?: AdbCrypto.loadOrGenerate(File(context.filesDir, "adb")).also { keyPair = it }
+
     fun deployServerDex(): File {
         val out = File(context.getExternalFilesDir(null), "mango-server.dex")
         if (!out.exists() || out.length() == 0L) {
@@ -40,6 +47,7 @@ class MangoManager(private val context: Context) {
         }
         return out
     }
+
     /**
      * 通过 Root 一键拉起服务 (类似 Shizuku 的 Root 启动)
      */
@@ -58,33 +66,39 @@ class MangoManager(private val context: Context) {
             state.value = MangoState.FAILED
         }
     }
+
     /**
-     * 开启雷达扫描配对端口
+     * 开启 NsdManager (mDNS) 监听配对服务
      */
     suspend fun startPairingDiscovery() = withContext(Dispatchers.IO) {
         state.value = MangoState.SEARCHING_PAIR
-        pairPort = MangoDiscovery.findPairingPort()
-        if (pairPort == null) {
+        val found = MangoDiscovery.findPairingPort(context)
+        if (found == null) {
             state.value = MangoState.FAILED
         } else {
+            pairHost = found.first
+            pairPort = found.second
             state.value = MangoState.WAITING_FOR_CODE
         }
     }
+
     /**
-     * 输入配对码后：配对 -> 扫描服务端口 -> 启动服务
+     * 输入配对码后：配对 -> 发现服务端口 -> 启动服务
      */
     suspend fun pairAndStart(code: String) = withContext(Dispatchers.IO) {
-        val port = pairPort ?: run { state.value = MangoState.FAILED; return@withContext }
+        if (pairPort == 0) { state.value = MangoState.FAILED; return@withContext }
         state.value = MangoState.PAIRING
-        val pairResult = AdbPairing.pair("127.0.0.1", port, code, getKeyPair())
+        val pairResult = AdbPairing.pair(pairHost, pairPort, code, getKeyPair())
         if (pairResult.isFailure) { state.value = MangoState.FAILED; return@withContext }
         state.value = MangoState.SEARCHING_SERVICE
-        val servicePort = MangoDiscovery.findServicePort(getKeyPair())
-        if (servicePort == null) { state.value = MangoState.FAILED; return@withContext }
+        val service = MangoDiscovery.findServicePort(context)
+        if (service == null) { state.value = MangoState.FAILED; return@withContext }
+        val serviceHost = service.first
+        val servicePort = service.second
         state.value = MangoState.STARTING
         try {
             deployServerDex()
-            AdbClient("127.0.0.1", servicePort, getKeyPair()).use { adb ->
+            AdbClient(serviceHost, servicePort, getKeyPair()).use { adb ->
                 adb.connect()
                 adb.shell(START_CMD)
             }
@@ -96,15 +110,18 @@ class MangoManager(private val context: Context) {
             state.value = MangoState.FAILED
         }
     }
+
     suspend fun stopService(): Boolean = withContext(Dispatchers.IO) {
         val r = runCatching { request(JSONObject().put("action", "stop")) }
         connection?.close(); connection = null
         state.value = MangoState.OFFLINE
         r.isSuccess
     }
+
     suspend fun ping(): Boolean = withContext(Dispatchers.IO) {
         runCatching { request(JSONObject().put("action", "ping")).optInt("code") == 0 }.getOrDefault(false)
     }
+
     suspend fun exec(cmd: String, timeout: Long = 60_000): String = withContext(Dispatchers.IO) {
         val resp = request(JSONObject().put("action", "exec").put("cmd", cmd).put("timeout", timeout))
         if (resp.optInt("code") != 0) return@withContext "❌ ${resp.optString("msg")}"
@@ -112,6 +129,7 @@ class MangoManager(private val context: Context) {
         val exit = resp.optInt("exit", 0)
         if (exit != 0) "$data\n↩ 退出码: $exit" else data
     }
+
     suspend fun screenshot(): Bitmap? = withContext(Dispatchers.IO) {
         runCatching {
             exec("screencap -p /data/local/tmp/mango_shot.png", 15_000)
@@ -120,6 +138,7 @@ class MangoManager(private val context: Context) {
             BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
         }.getOrNull()
     }
+
     suspend fun installApk(uri: android.net.Uri): String = withContext(Dispatchers.IO) {
         val tmp = File(context.getExternalFilesDir(null), "mango_install.apk")
         runCatching {
@@ -127,6 +146,7 @@ class MangoManager(private val context: Context) {
             exec("cp ${tmp.absolutePath} /data/local/tmp/mango_install.apk && pm install -r -g /data/local/tmp/mango_install.apk && rm -f /data/local/tmp/mango_install.apk", 180_000)
         }.getOrElse { "❌ ${it.message}" }
     }
+
     private fun request(json: JSONObject): JSONObject {
         val c = connection ?: MangoConnection().also { connection = it }
         return try {
@@ -138,6 +158,7 @@ class MangoManager(private val context: Context) {
         }
     }
 }
+
 class MangoConnection {
     private var socket: LocalSocket? = null
     private var reader: BufferedReader? = null

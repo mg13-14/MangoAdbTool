@@ -1,111 +1,73 @@
 package com.mango.adbtool.core
-import com.mango.adbtool.adb.AdbClient
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.withContext
-import java.io.DataInputStream
-import java.net.InetSocketAddress
-import java.security.KeyPair
-import java.security.SecureRandom
-import java.security.cert.X509Certificate
-import javax.net.ssl.SSLContext
-import javax.net.ssl.SSLSocket
-import javax.net.ssl.TrustManager
-import javax.net.ssl.X509TrustManager
 
+import android.content.Context
+import android.net.nsd.NsdManager
+import android.net.nsd.NsdServiceInfo
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.coroutines.resume
+
+/**
+ * 基于 NsdManager (mDNS) 的服务发现器，与 Shizuku 同款机制。
+ * 系统点开配对码界面时广播 _adb-tls-pairing._tcp，
+ * 无线调试开启时广播 _adb-tls-connect._tcp，精准监听即可，无需盲扫端口。
+ */
 object MangoDiscovery {
-    private const val SCAN_FROM = 30000
-    private const val SCAN_TO = 49500
-    private const val CHUNK = 256          // 每块并发数，避免文件描述符耗尽
-    private const val CONNECT_TIMEOUT = 100
-    private const val READ_TIMEOUT = 200
 
-    // 复用 trust-all SSLContext：全盘扫描要建近 2 万个 socket，每端口新建会拖垮性能
-    private val sslContext: SSLContext by lazy {
-        val tm = arrayOf<TrustManager>(object : X509TrustManager {
-            override fun checkClientTrusted(c: Array<X509Certificate>?, a: String?) {}
-            override fun checkServerTrusted(c: Array<X509Certificate>?, a: String?) {}
-            override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
-        })
-        SSLContext.getInstance("TLS").apply { init(null, tm, SecureRandom()) }
-    }
-
-    /**
-     * 雷达扫描：寻找配对端口
-     * 当系统弹出配对码界面时，会临时开启一个 TLS 服务端，
-     * 它会主动推送 ADB 配对协议消息（首字节 version=1）
-     */
-    suspend fun findPairingPort(): Int? = withContext(Dispatchers.IO) {
-        repeat(6) {
-            var port = SCAN_FROM
-            while (port < SCAN_TO) {
-                val end = minOf(port + CHUNK, SCAN_TO)
-                val found = scanChunkForPairing(port, end)
-                if (found != null) return@withContext found
-                port = end
-            }
-            delay(400)
-        }
-        null
-    }
-
-    private suspend fun scanChunkForPairing(start: Int, end: Int): Int? = coroutineScope {
-        (start until end).map { port ->
-            async(Dispatchers.IO) {
-                var socket: SSLSocket? = null
-                try {
-                    socket = sslContext.socketFactory.createSocket() as SSLSocket
-                    socket.tcpNoDelay = true
-                    socket.connect(InetSocketAddress("127.0.0.1", port), CONNECT_TIMEOUT)
-                    socket.enabledProtocols = arrayOf("TLSv1.2")
-                    socket.soTimeout = READ_TIMEOUT
-                    socket.startHandshake()
-                    // ADB 配对协议：服务端主动推送 [version=1][type][len][data]
-                    val version = DataInputStream(socket.inputStream).read()
-                    if (version == 1) port else null
-                } catch (t: Throwable) {
-                    null
-                } finally {
-                    runCatching { socket?.close() } // 失败端口也必须关闭，防止 fd 泄漏
+    private suspend fun findService(context: Context, type: String, timeoutMs: Long): Pair<String, Int>? {
+        return withTimeoutOrNull(timeoutMs) {
+            suspendCancellableCoroutine { cont ->
+                val nsdManager = context.getSystemService(Context.NSD_SERVICE) as? NsdManager
+                if (nsdManager == null) {
+                    cont.resume(null)
+                    return@suspendCancellableCoroutine
                 }
-            }
-        }.awaitAll().firstOrNull { it != null }
-    }
-
-    /**
-     * 雷达扫描：寻找服务端口
-     * 配对成功后，adbd 会在另一个端口监听 ADB 连接
-     */
-    suspend fun findServicePort(keyPair: KeyPair): Int? = withContext(Dispatchers.IO) {
-        repeat(6) {
-            var port = SCAN_FROM
-            while (port < SCAN_TO) {
-                val end = minOf(port + CHUNK, SCAN_TO)
-                val found = scanChunkForService(port, end, keyPair)
-                if (found != null) return@withContext found
-                port = end
-            }
-            delay(400)
-        }
-        null
-    }
-
-    private suspend fun scanChunkForService(start: Int, end: Int, keyPair: KeyPair): Int? = coroutineScope {
-        (start until end).map { port ->
-            async(Dispatchers.IO) {
-                try {
-                    // 探测用短超时，非 ADB 的 TLS 端口快速失败，不拖慢全盘扫描
-                    AdbClient("127.0.0.1", port, keyPair, connectTimeoutMs = 150, handshakeTimeoutMs = 1500).use { client ->
-                        client.connect()
+                // 用局部变量持有 DiscoveryListener，供 resolve 回调和取消时停止发现
+                lateinit var discoveryListener: NsdManager.DiscoveryListener
+                discoveryListener = object : NsdManager.DiscoveryListener {
+                    override fun onDiscoveryStarted(serviceType: String) {}
+                    override fun onDiscoveryStopped(serviceType: String) {}
+                    override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
+                        if (cont.isActive) cont.resume(null)
                     }
-                    port
-                } catch (t: Throwable) {
-                    null
+                    override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) {}
+                    override fun onServiceFound(serviceInfo: NsdServiceInfo) {
+                        if (!serviceInfo.serviceType.contains(type)) return
+                        nsdManager.resolveService(serviceInfo, object : NsdManager.ResolveListener {
+                            override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {}
+                            override fun onServiceResolved(serviceInfo: NsdServiceInfo) {
+                                val host = serviceInfo.host?.hostAddress ?: "127.0.0.1"
+                                val port = serviceInfo.port
+                                if (cont.isActive) {
+                                    try { nsdManager.stopServiceDiscovery(discoveryListener) } catch (_: Exception) {}
+                                    cont.resume(host to port)
+                                }
+                            }
+                        })
+                    }
+                    override fun onServiceLost(serviceInfo: NsdServiceInfo) {}
+                }
+                cont.invokeOnCancellation {
+                    try { nsdManager.stopServiceDiscovery(discoveryListener) } catch (_: Exception) {}
+                }
+                try {
+                    nsdManager.discoverServices(type, NsdManager.PROTOCOL_DNS_SD, discoveryListener)
+                } catch (e: Exception) {
+                    if (cont.isActive) cont.resume(null)
                 }
             }
-        }.awaitAll().firstOrNull { it != null }
+        }
     }
+
+    /**
+     * 发现配对端口：等待窗口 60s，给用户足够时间在系统里点开配对码弹窗
+     */
+    suspend fun findPairingPort(context: Context): Pair<String, Int>? =
+        findService(context, "_adb-tls-pairing._tcp", 60_000L)
+
+    /**
+     * 发现服务端口：配对成功后无线调试已开启，广播常在，短超时即可
+     */
+    suspend fun findServicePort(context: Context): Pair<String, Int>? =
+        findService(context, "_adb-tls-connect._tcp", 20_000L)
 }

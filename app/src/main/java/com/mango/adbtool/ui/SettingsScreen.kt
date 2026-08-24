@@ -20,7 +20,7 @@ fun SettingsScreen() {
         Spacer(Modifier.height(30.dp))
         Text("🥭", fontSize = 64.sp)
         Text("芒果提权工具", fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = CocoaInk)
-        Text("v1.2.0 · 液态玻璃版", fontSize = 12.sp, color = CocoaInkLight)
+        Text("v1.3.0 · 液态玻璃版", fontSize = 12.sp, color = CocoaInkLight)
         Spacer(Modifier.height(24.dp))
         // 关于本软件
         GlassCard(Modifier.fillMaxWidth()) {
@@ -39,9 +39,9 @@ fun SettingsScreen() {
             SectionTitle("⚙️ 工作原理")
             Spacer(Modifier.height(10.dp))
             Text(
-                "1️⃣ App 发起雷达扫描，发现系统配对界面。\n" +
+                "1️⃣ App 通过系统 mDNS 服务发现（NsdManager）监听配对界面。\n" +
                 "2️⃣ 用户填入配对码，App 将自己的 ADB 公钥交给 adbd。\n" +
-                "3️⃣ App 再次扫描真正的服务端口，通过本机回环 ADB 执行 app_process。\n" +
+                "3️⃣ App 再次定位真正的服务端口，通过本机回环 ADB 执行 app_process。\n" +
                 "4️⃣ 启动 shell(uid 2000) 权限的服务进程，App 通过 abstract socket 与其通信。\n" +
                 "5️⃣ 借服务进程之手，执行 pm / am / settings / input 等高权限命令。\n\n" +
                 "已 Root 的设备（Magisk / KernelSU）可直接「Root 启动」，跳过全部配对流程。",
